@@ -50,6 +50,12 @@ jobs:
         with:
           name: zangetsu-android
           path: build/app/outputs/flutter-apk/*.apk
+      - name: Publicar Release (APKs para descarregar)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete android-latest --cleanup-tag -y --repo ${{ github.repository }} || true
+          gh release create android-latest build/app/outputs/flutter-apk/*.apk --repo ${{ github.repository }} --prerelease --target ${{ github.sha }} --title "Android (teste)" --notes "Build automatico do commit ${{ github.sha }}."
 
   windows:
     runs-on: windows-latest
@@ -95,3 +101,12 @@ jobs:
         with:
           name: zangetsu-windows
           path: build/windows/x64/runner/Release/**
+      - name: Publicar Release (zip para descarregar)
+        if: success()
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath Zangetsu-Windows.zip -Force
+          gh release delete windows-latest --cleanup-tag -y --repo ${{ github.repository }}; $global:LASTEXITCODE = 0
+          gh release create windows-latest Zangetsu-Windows.zip --repo ${{ github.repository }} --prerelease --target ${{ github.sha }} --title "Windows (teste)" --notes "Build automatico do commit ${{ github.sha }}. Extrai o zip e abre watch_app.exe."
