@@ -1,12 +1,15 @@
-# Coloca este ficheiro no teu FORK do Zangetsu em: .github/workflows/build.yml
-# Corre grátis nos runners do GitHub Actions (repositórios públicos: minutos ilimitados).
-# NÃO TESTADO: escrito a partir da leitura do repositório, sem poder compilar no ambiente do Claude.
+# Build gratuito (GitHub Actions) do Zangetsu: Android (telemóvel + TV) e Windows.
+# O log de cada job é publicado numa branch (build-logs-android / build-logs-windows)
+# para que o Claude o consiga ler e corrigir os erros.
 name: build
 
 on:
   workflow_dispatch:   # botão "Run workflow" no separador Actions
   push:
     branches: [windows-port]
+
+permissions:
+  contents: write      # necessário só para publicar o log nas branches build-logs-*
 
 jobs:
   android:
@@ -21,9 +24,28 @@ jobs:
         with:
           channel: stable
           cache: true
-      - run: flutter pub get
-      - run: flutter build apk --release --split-per-abi   # telemóveis
-      - run: flutter build apk --release                    # APK único (ABIs ARM) para Android TV
+      - name: Build APKs
+        shell: bash
+        run: |
+          set -o pipefail
+          {
+            flutter --version
+            flutter pub get
+            flutter build apk --release --split-per-abi   # telemóveis
+            flutter build apk --release                    # APK único (ABIs ARM) para Android TV
+          } 2>&1 | tee "$RUNNER_TEMP/build.log"
+      - name: Publicar log
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/lg" && cd "$RUNNER_TEMP/lg"
+          tail -n 1500 "$RUNNER_TEMP/build.log" > android.log || echo "sem log" > android.log
+          git init -q -b build-logs-android
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add android.log
+          git commit -q -m "log do run ${GITHUB_RUN_ID}"
+          git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" build-logs-android
       - uses: actions/upload-artifact@v4
         with:
           name: zangetsu-android
@@ -31,20 +53,36 @@ jobs:
 
   windows:
     runs-on: windows-latest
-    continue-on-error: true   # esperado falhar até o port estar pronto; os logs dizem o que falta
+    continue-on-error: true   # esperado falhar até o port estar pronto; o log diz o que falta
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
-      - run: flutter config --enable-windows-desktop
-      - name: Gerar a pasta windows/ se não existir
+      - name: Build Windows
         shell: bash
         run: |
-          if [ ! -d windows ]; then flutter create --platforms=windows --project-name watch_app .; fi
-      - run: flutter pub get
-      - run: flutter build windows --release
+          set -o pipefail
+          {
+            flutter --version
+            flutter config --enable-windows-desktop
+            if [ ! -d windows ]; then flutter create --platforms=windows --project-name watch_app .; fi
+            flutter pub get
+            flutter build windows --release -v
+          } 2>&1 | tee "$RUNNER_TEMP/build.log"
+      - name: Publicar log
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/lg" && cd "$RUNNER_TEMP/lg"
+          tail -n 1500 "$RUNNER_TEMP/build.log" > windows.log || echo "sem log" > windows.log
+          git init -q -b build-logs-windows
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add windows.log
+          git commit -q -m "log do run ${GITHUB_RUN_ID}"
+          git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" build-logs-windows
       - uses: actions/upload-artifact@v4
         if: success()
         with:
