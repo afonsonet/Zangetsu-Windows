@@ -8,6 +8,10 @@ on:
   push:
     branches: [windows-port]
 
+env:
+  # Versao da Release do Windows (Windows-Port X.Y). Sobe 0.1 de cada vez.
+  WINDOWS_PORT_VERSION: "0.2"
+
 permissions:
   contents: write      # necessário só para publicar o log nas branches build-logs-*
 
@@ -74,13 +78,8 @@ jobs:
             flutter --version
             flutter config --enable-windows-desktop
             if [ ! -d windows ]; then flutter create --platforms=windows --project-name watch_app .; fi
-            # permission_handler_windows usa <experimental/coroutine>, que o MSVC do VS 2026
-            # trata como erro (STL1011). A definição vai logo a seguir ao project(), antes de
-            # os plugins serem adicionados, para se aplicar a todos os targets.
-            if ! grep -q _SILENCE_EXPERIMENTAL_COROUTINE windows/CMakeLists.txt; then
-              sed -i '/^project(/a add_compile_definitions(_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)' windows/CMakeLists.txt
-            fi
-            grep -n -B1 -A1 _SILENCE_EXPERIMENTAL_COROUTINE windows/CMakeLists.txt
+            # Marca Zangetsu (icone, nome) + fix STL1011; ver tool/patch_windows.sh
+            bash tool/patch_windows.sh
             flutter pub get
             flutter build windows --release
           } 2>&1 | tee "$RUNNER_TEMP/build.log"
@@ -107,6 +106,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          $v = $env:WINDOWS_PORT_VERSION
+          $tag = "windows-port-$v"
           Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath Zangetsu-Windows.zip -Force
-          gh release delete windows-latest --cleanup-tag -y --repo ${{ github.repository }}; $global:LASTEXITCODE = 0
-          gh release create windows-latest Zangetsu-Windows.zip --repo ${{ github.repository }} --prerelease --target ${{ github.sha }} --title "Windows (teste)" --notes "Build automatico do commit ${{ github.sha }}. Extrai o zip e abre watch_app.exe."
+          # Cada versao tem a sua tag e as anteriores ficam. Re-correr a MESMA versao substitui-a.
+          gh release delete $tag --cleanup-tag -y --repo ${{ github.repository }} 2>$null
+          $global:LASTEXITCODE = 0
+          gh release create $tag Zangetsu-Windows.zip --repo ${{ github.repository }} --prerelease --target ${{ github.sha }} --title "Windows-Port $v" --notes "Build automatico do commit ${{ github.sha }}. Extrai o zip e abre Zangetsu.exe."

@@ -31,6 +31,7 @@ class _ControlsOverlay extends StatelessWidget {
     required this.megaSkipSeconds,
     required this.onMegaSkip,
     this.onPip,
+    this.onFullscreen,
     this.onChat,
     this.onInfo,
     this.infoOpen = false,
@@ -75,6 +76,7 @@ class _ControlsOverlay extends StatelessWidget {
   final int megaSkipSeconds;
   final VoidCallback onMegaSkip;
   final VoidCallback? onPip; // null = PiP unsupported (hide the button)
+  final VoidCallback? onFullscreen; // null = not Windows (hide the button)
   final VoidCallback? onChat; // in-room chat toggle (null = no active room)
   final VoidCallback? onInfo; // toggle the info panel (null = no fields picked)
   final bool infoOpen; // whether the info panel is currently shown
@@ -571,6 +573,22 @@ class _ControlsOverlay extends StatelessWidget {
                     tooltip: context.l10n.settingsTooltip,
                     onPressed: onSettings,
                   ),
+                  if (onFullscreen != null)
+                    ValueListenableBuilder<bool>(
+                      valueListenable: DesktopWindow.fullscreen,
+                      builder: (context, full, _) => IconButton(
+                        icon: Icon(
+                          full
+                              ? Icons.fullscreen_exit_rounded
+                              : Icons.fullscreen_rounded,
+                          color: Colors.white,
+                        ),
+                        tooltip: full
+                            ? 'Exit fullscreen (F / Esc)'
+                            : 'Fullscreen (F)',
+                        onPressed: onFullscreen,
+                      ),
+                    ),
                   if (onChat != null)
                     IconButton(
                       icon: const Icon(

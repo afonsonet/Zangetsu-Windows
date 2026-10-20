@@ -21,6 +21,7 @@ import '../../core/zmode/playback_resolver.dart';
 import '../../core/tracker/tracker_hub.dart';
 import '../../core/playback/external_player.dart';
 import '../../core/logging/app_logger.dart';
+import '../../core/platform/desktop_window.dart';
 import 'phone_playback_launch.dart';
 import '../../core/playback/playback_prefs.dart';
 import 'subtitle_style.dart';
@@ -457,9 +458,82 @@ class _PlayerScreenState extends State<PlayerScreen> {
     await Navigator.of(context).maybePop();
   }
 
+  // ── Desktop keyboard (Windows / Linux / macOS) ──────────────────────────
+  //
+  // Registered on HardwareKeyboard rather than a Focus widget so it keeps
+  // working after a click moves focus onto a button or nowhere at all. It only
+  // acts while this player is the visible route and no text field has focus,
+  // so Settings, sheets, dialogs and the chat box keep their own keys.
+
+  static final bool _desktopKeys =
+      Platform.isWindows || Platform.isLinux || Platform.isMacOS;
+
+  /// Seek step for the arrow keys. Fixed at 10 s — deliberately not the
+  /// double-tap setting, which is for touch.
+  static const int _keySeekSeconds = 10;
+
+  bool _onDesktopKey(KeyEvent event) {
+    if (!mounted || !_ready || _locked) return false;
+    if (event is KeyUpEvent) return false;
+    if (ModalRoute.of(context)?.isCurrent != true) return false;
+    final focusCtx = FocusManager.instance.primaryFocus?.context;
+    if (focusCtx != null &&
+        (focusCtx.widget is EditableText ||
+            focusCtx.findAncestorWidgetOfExactType<EditableText>() != null)) {
+      return false;
+    }
+    final key = event.logicalKey;
+    final repeat = event is KeyRepeatEvent;
+    if (key == LogicalKeyboardKey.space) {
+      if (!repeat) {
+        _c.togglePlay();
+        _bumpControls();
+      }
+      return true;
+    }
+    if (key == LogicalKeyboardKey.arrowLeft) {
+      _keySeek(-1);
+      return true;
+    }
+    if (key == LogicalKeyboardKey.arrowRight) {
+      _keySeek(1);
+      return true;
+    }
+    if (key == LogicalKeyboardKey.keyF || key == LogicalKeyboardKey.f11) {
+      if (!repeat) unawaited(DesktopWindow.toggleFullscreen());
+      return true;
+    }
+    if (key == LogicalKeyboardKey.escape && DesktopWindow.fullscreen.value) {
+      unawaited(DesktopWindow.setFullscreen(false));
+      return true;
+    }
+    return false;
+  }
+
+  /// Jump [_keySeekSeconds] back (−1) or forward (+1) right away and flash the
+  /// same side indicator the double-tap seek uses. Holding the key repeats.
+  void _keySeek(int dir) {
+    _c.seekBy(Duration(seconds: dir * _keySeekSeconds));
+    if (_seekSide != dir) _seekAccum = 0;
+    _seekSide = dir;
+    _seekAccum += _keySeekSeconds;
+    _seekTick++;
+    _seekLabelTimer?.cancel();
+    setState(() {});
+    _seekLabelTimer = Timer(const Duration(milliseconds: 800), () {
+      if (mounted) {
+        setState(() {
+          _seekSide = 0;
+          _seekAccum = 0;
+        });
+      }
+    });
+  }
+
   @override
   void initState() {
     super.initState();
+    if (_desktopKeys) HardwareKeyboard.instance.addHandler(_onDesktopKey);
     // Refresh the "enhancement shaders downloaded?" flag so the in-player picker
     // gates correctly (they're fetched on demand from Settings). Fire-and-forget.
     unawaited(ShaderPresets.refreshDownloaded());
@@ -1291,6 +1365,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (sl.isRegistered<PlaybackResolver>()) {
       sl<PlaybackResolver>().abortSweeps();
     }
+    if (_desktopKeys) HardwareKeyboard.instance.removeHandler(_onDesktopKey);
+    // Never leave the whole app stuck in fullscreen after the player closes.
+    unawaited(DesktopWindow.setFullscreen(false));
     _hideTimer?.cancel();
     _showTimer?.cancel();
     _seekLabelTimer?.cancel();
@@ -3087,6 +3164,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                           onSettings: _openSettings,
                           barConfig: _barConfig,
                           onZoom: _cycleFit,
+                          onFullscreen: DesktopWindow.supported
+                              ? DesktopWindow.toggleFullscreen
+                              : null,
                           onPip: _pipSupported ? _enterPip : null,
                           onSleep: _openSleepSheet,
                           sleepActive: _sleepActive,

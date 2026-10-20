@@ -15,6 +15,7 @@ import 'core/analytics/analytics.dart';
 import 'core/app_config.dart';
 import 'core/app_mode.dart';
 import 'core/di/injector.dart';
+import 'core/platform/desktop_window.dart';
 import 'core/ui/splash_style.dart';
 import 'core/hive/safe_box.dart';
 import 'core/discord/discord_rpc.dart';
@@ -179,6 +180,9 @@ Future<void> main() async {
       } catch (e, st) {
         AppLogger.instance.logError(e, st);
       }
+      // Windows only: window title + true-fullscreen support. No-op elsewhere
+      // and never throws, so it can't hold up boot.
+      await DesktopWindow.init();
       // Dependency init happens inside the boot gate so the splash shows
       // immediately instead of a blank screen.
       runApp(const WatchApp());

@@ -155,6 +155,10 @@ dependencies:
   # Render the QR on the TV device-pairing screen (pure Dart).
   qr_flutter: ^4.1.0
   floating: ^6.0.0
+  # Windows build only: window title + true fullscreen (no taskbar). Has no
+  # Android/iOS implementation, so those builds ignore it; every call goes
+  # through lib/core/platform/desktop_window.dart, which is a no-op off Windows.
+  window_manager: ^0.5.1
   # In-app updates: read the running version + check GitHub Releases, then hand
   # the downloaded APK to the system installer.
   package_info_plus: ^10.2.1
