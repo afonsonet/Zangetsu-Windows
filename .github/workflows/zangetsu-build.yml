@@ -62,16 +62,19 @@ jobs:
           cache: true
       - name: Build Windows
         shell: bash
-        env:
-          # permission_handler_windows usa <experimental/coroutine>, que o MSVC do VS 2026
-          # trata como erro (STL1011). A variável CL é lida pelo cl.exe em todos os targets.
-          CL: /D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS
         run: |
           set -o pipefail
           {
             flutter --version
             flutter config --enable-windows-desktop
             if [ ! -d windows ]; then flutter create --platforms=windows --project-name watch_app .; fi
+            # permission_handler_windows usa <experimental/coroutine>, que o MSVC do VS 2026
+            # trata como erro (STL1011). A definição vai logo a seguir ao project(), antes de
+            # os plugins serem adicionados, para se aplicar a todos os targets.
+            if ! grep -q _SILENCE_EXPERIMENTAL_COROUTINE windows/CMakeLists.txt; then
+              sed -i '/^project(/a add_compile_definitions(_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)' windows/CMakeLists.txt
+            fi
+            grep -n -B1 -A1 _SILENCE_EXPERIMENTAL_COROUTINE windows/CMakeLists.txt
             flutter pub get
             flutter build windows --release
           } 2>&1 | tee "$RUNNER_TEMP/build.log"
