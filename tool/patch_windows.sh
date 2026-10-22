@@ -19,10 +19,16 @@ echo "icon: replaced windows/runner/resources/app_icon.ico"
 #    from CMakeLists.txt to find the exe, so this is the only place to change.
 sed -i "s/set(BINARY_NAME \"[^\"]*\")/set(BINARY_NAME \"${APP_NAME}\")/" windows/CMakeLists.txt
 
-# 3. Name shown in file properties / task manager (version resource).
+# 3. Name shown in task manager / file properties (version resource).
+#    Only FileDescription, InternalName and OriginalFilename are changed.
+#    CompanyName and ProductName are deliberately LEFT as generated: Flutter's
+#    path_provider builds the app-data folder (%APPDATA%\<CompanyName>\<ProductName>)
+#    from them, so changing them silently moves every user's settings, login and
+#    installed sources to a new empty folder (this is what v0.2 did by mistake).
 sed -i \
-  -e "s/watch_app/${APP_NAME}/g" \
-  -e "s/com\.example/${APP_NAME}/g" \
+  -e "s|\(VALUE \"FileDescription\", \)\"[^\"]*\"|\1\"${APP_NAME}\"|" \
+  -e "s|\(VALUE \"InternalName\", \)\"[^\"]*\"|\1\"${APP_NAME}\"|" \
+  -e "s|\(VALUE \"OriginalFilename\", \)\"[^\"]*\"|\1\"${APP_NAME}.exe\"|" \
   windows/runner/Runner.rc
 
 # 4. Initial window title (also set at runtime by DesktopWindow.init()).

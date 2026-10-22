@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:watch_app/core/hive/safe_box.dart';
 import 'package:watch_app/core/hive/source_icon_store.dart';
 import 'package:watch_app/core/lnreader/novel_cloudflare.dart';
+import 'package:watch_app/core/desktop/windows_http_lane.dart';
+import 'package:watch_app/core/logging/app_logger.dart';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
@@ -727,6 +729,20 @@ Future<void> initDependencies() async {
         }
       }
 
+      // Windows: same idea as the native lane above, via the bundled Chrome-TLS
+      // helper (see tools/cfhelper). Null = helper missing/failed -> Dio below.
+      if (Platform.isWindows) {
+        final lane = await WindowsHttpLane.fetch(
+          url: url,
+          method: method,
+          headers: mergedHeaders.map((k, v) => MapEntry(k, v.toString())),
+          body: init['body'] is String
+              ? init['body'] as String
+              : init['body']?.toString(),
+        );
+        if (lane != null) return lane;
+      }
+
       final res = await dio.request<String>(
         url,
         data: init['body'],
@@ -740,6 +756,11 @@ Future<void> initDependencies() async {
           validateStatus: (_) => true,
         ),
       );
+      if (Platform.isWindows) {
+        AppLogger.instance.log(
+          '[net] $method ${Uri.tryParse(url)?.host} -> ${res.statusCode} (dio)',
+        );
+      }
       return LnReaderHttpResponse(
         status: res.statusCode ?? 0,
         body: res.data ?? '',

@@ -10,6 +10,8 @@ import 'package:hive/hive.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../aniyomi/aniyomi_repo.dart';
+import '../desktop/desktop_cf_solver.dart';
+import '../lnreader/novel_cloudflare.dart';
 import '../provider/cf_solve_needed.dart';
 import 'mihon_manager.dart';
 import 'mihon_provider.dart';
@@ -229,6 +231,14 @@ class MihonExtensionService {
   /// clearance, so this also clears when the user simply backed out. That is
   /// self-correcting: the next request hits the challenge and re-flags it.
   static Future<void> solveCloudflare(String url) async {
+    if (Platform.isWindows) {
+      // No native activity on Windows: use the WebView2 solver instead.
+      final ok = await DesktopCfSolver.solve(url);
+      final host = Uri.tryParse(url)?.host;
+      if (ok && host != null && host.isNotEmpty) CfSolveNeeded.clear(host);
+      if (ok) NovelCloudflare.clear();
+      return;
+    }
     try {
       await _channel.invokeMethod<void>('solveCloudflare', {'url': url});
       final host = Uri.tryParse(url)?.host;

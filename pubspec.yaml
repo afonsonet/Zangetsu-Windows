@@ -159,6 +159,8 @@ dependencies:
   # Android/iOS implementation, so those builds ignore it; every call goes
   # through lib/core/platform/desktop_window.dart, which is a no-op off Windows.
   window_manager: ^0.5.1
+  # Windows Cloudflare solver (WebView2); only imported from lib/core/desktop.
+  flutter_inappwebview: ^6.1.5
   # In-app updates: read the running version + check GitHub Releases, then hand
   # the downloaded APK to the system installer.
   package_info_plus: ^10.2.1

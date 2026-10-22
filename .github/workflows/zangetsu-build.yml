@@ -1,6 +1,5 @@
 # Build gratuito (GitHub Actions) do Zangetsu para Windows.
-# O log de cada job é publicado numa branch (build-logs-android / build-logs-windows)
-# para que o Claude o consiga ler e corrigir os erros.
+# O log do build é publicado na branch build-logs-windows (útil para diagnosticar falhas).
 name: build
 
 on:
@@ -10,7 +9,7 @@ on:
 
 env:
   # Versao da Release do Windows (Windows-Port X.Y). Sobe 0.1 de cada vez.
-  WINDOWS_PORT_VERSION: "0.2"
+  WINDOWS_PORT_VERSION: "0.3"
 
 permissions:
   contents: write      # necessário só para publicar o log nas branches build-logs-*
@@ -24,6 +23,20 @@ jobs:
         with:
           channel: stable
           cache: true
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache-dependency-path: tools/cfhelper/go.mod
+      - name: Build cfhelper (Chrome TLS helper)
+        shell: bash
+        run: |
+          set -o pipefail
+          {
+            cd tools/cfhelper
+            go get github.com/bogdanfinn/tls-client@latest
+            go mod tidy
+            GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o "$RUNNER_TEMP/cfhelper.exe" .
+          } 2>&1 | tee "$RUNNER_TEMP/helper.log"
       - name: Build Windows
         shell: bash
         run: |
@@ -36,13 +49,15 @@ jobs:
             bash tool/patch_windows.sh
             flutter pub get
             flutter build windows --release
+            mkdir -p build/windows/x64/runner/Release/cf-helper
+            cp "$RUNNER_TEMP/cfhelper.exe" build/windows/x64/runner/Release/cf-helper/cfhelper.exe
           } 2>&1 | tee "$RUNNER_TEMP/build.log"
       - name: Publicar log
         if: always()
         shell: bash
         run: |
           mkdir -p "$RUNNER_TEMP/lg" && cd "$RUNNER_TEMP/lg"
-          tail -n 1500 "$RUNNER_TEMP/build.log" > windows.log || echo "sem log" > windows.log
+          { cat "$RUNNER_TEMP/helper.log" 2>/dev/null; tail -n 1500 "$RUNNER_TEMP/build.log"; } > windows.log || echo "sem log" > windows.log
           git init -q -b build-logs-windows
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
