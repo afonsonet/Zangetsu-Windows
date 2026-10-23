@@ -64,18 +64,18 @@ jobs:
             $sid = ($srcs | ConvertFrom-Json).data.sources.nodes | Where-Object { $_.name -match "MangaDex" -and $_.lang -eq "en" } | Select-Object -First 1 -ExpandProperty id
             Write-Host "sid=$sid"
             if ($sid) {
-              $pop = Gql "mutation { fetchSourceManga(input: { source: \"$sid\", type: POPULAR, page: 1 }) { hasNextPage mangas { id title thumbnailUrl url } } }"
+              $pop = Gql ('mutation { fetchSourceManga(input: { source: "SID", type: POPULAR, page: 1 }) { hasNextPage mangas { id title thumbnailUrl url } } }'.Replace('SID', "$sid"))
               Show "popular" $pop
               $mid = ($pop | ConvertFrom-Json).data.fetchSourceManga.mangas | Select-Object -First 1 -ExpandProperty id
               Write-Host "mid=$mid"
               if ($mid) {
-                Show "fetchManga" (Gql "mutation { fetchManga(input: { id: $mid }) { manga { id title author artist description genre status thumbnailUrl realUrl } } }")
-                $ch = Gql "mutation { fetchChapters(input: { mangaId: $mid }) { chapters { id name chapterNumber scanlator uploadDate url } } }"
+                Show "fetchManga" (Gql ('mutation { fetchManga(input: { id: MID }) { manga { id title author artist description genre status thumbnailUrl realUrl } } }'.Replace('MID', "$mid")))
+                $ch = Gql ('mutation { fetchChapters(input: { mangaId: MID }) { chapters { id name chapterNumber scanlator uploadDate url } } }'.Replace('MID', "$mid"))
                 Show "chapters" $ch
                 $cid = ($ch | ConvertFrom-Json).data.fetchChapters.chapters | Select-Object -First 1 -ExpandProperty id
                 Write-Host "cid=$cid"
                 if ($cid) {
-                  $pg = Gql "mutation { fetchChapterPages(input: { chapterId: $cid }) { pages chapter { id pageCount } } }"
+                  $pg = Gql ('mutation { fetchChapterPages(input: { chapterId: CID }) { pages chapter { id pageCount } } }'.Replace('CID', "$cid"))
                   Show "pages" $pg
                   $first = ($pg | ConvertFrom-Json).data.fetchChapterPages.pages | Select-Object -First 1
                   Write-Host "first page=$first"
