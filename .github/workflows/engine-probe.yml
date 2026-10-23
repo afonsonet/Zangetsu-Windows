@@ -56,8 +56,14 @@ jobs:
           function Show($title, $text) { Write-Host "--- $title ---"; $s = "$text"; if ($s.Length -gt 2500) { $s = $s.Substring(0,2500) + " ...[cortado]" }; Write-Host $s }
           if ($up) {
             Show "set repo" (Gql 'mutation { setSettings(input: { settings: { extensionRepos: ["https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json"] } }) { settings { extensionRepos } } }')
+            Start-Sleep -Seconds 5
             Show "fetchExtensions" (Gql 'mutation { fetchExtensions(input: {}) { extensions { pkgName name lang isInstalled isObsolete hasUpdate } } }')
+            Start-Sleep -Seconds 10
+            $exts = Gql '{ extensions { nodes { pkgName name lang isInstalled repo } } }'
+            Show "extensions query" $exts
+            Show "extensions mangadex" (($exts | Select-String -Pattern '\{[^{}]*mangadex[^{}]*\}' -AllMatches).Matches.Value -join "`n")
             Show "install mangadex" (Gql 'mutation { updateExtension(input: { id: "eu.kanade.tachiyomi.extension.all.mangadex", patch: { install: true } }) { extension { pkgName isInstalled } } }')
+            Show "log hints" ((Get-Content "$env:RUNNER_TEMP\suw.out" -ErrorAction SilentlyContinue | Where-Object { $_ -match "xtension|WARN|ERROR" -and $_ -notmatch "Downloading" } | Select-Object -Last 25) -join "`n")
             Start-Sleep -Seconds 8
             $srcs = Gql '{ sources { nodes { id name lang displayName isNsfw supportsLatest iconUrl } } }'
             Show "sources" $srcs
