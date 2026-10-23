@@ -57,8 +57,14 @@ jobs:
           if ($up) {
             Show "set repo" (Gql 'mutation { setSettings(input: { settings: { extensionRepos: ["https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json"] } }) { settings { extensionRepos } } }')
             Start-Sleep -Seconds 5
-            Show "fetchExtensions" (Gql 'mutation { fetchExtensions(input: {}) { extensions { pkgName name lang isInstalled isObsolete hasUpdate } } }')
-            Start-Sleep -Seconds 10
+            for ($k = 1; $k -le 6; $k++) {
+              $fx = Gql 'mutation { fetchExtensions(input: {}) { extensions { pkgName } } }'
+              $cnt = ([regex]::Matches($fx, 'pkgName')).Count
+              Write-Host "fetchExtensions try $k -> $cnt extensions"
+              if ($cnt -gt 50) { break }
+              Start-Sleep -Seconds 5
+            }
+            Start-Sleep -Seconds 3
             $exts = Gql '{ extensions { nodes { pkgName name lang isInstalled repo } } }'
             Show "extensions query" $exts
             Show "extensions mangadex" (($exts | Select-String -Pattern '\{[^{}]*mangadex[^{}]*\}' -AllMatches).Matches.Value -join "`n")
