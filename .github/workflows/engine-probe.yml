@@ -22,8 +22,12 @@ jobs:
           Start-Transcript -Path "$env:RUNNER_TEMP\probe.log" | Out-Null
           New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\suw" | Out-Null
           Set-Location "$env:RUNNER_TEMP\suw"
-          gh release view --repo Suwayomi/Suwayomi-Server --json tagName,assets -q '.tagName, (.assets[]|.name+" "+(.size|tostring))'
-          gh release download --repo Suwayomi/Suwayomi-Server --pattern "*win64*.zip" --dir .
+          $rel = gh api repos/Suwayomi/Suwayomi-Server/releases/latest | ConvertFrom-Json
+          Write-Host "tag=$($rel.tag_name)"
+          $rel.assets | ForEach-Object { Write-Host "asset: $($_.name) $($_.size)" }
+          $asset = $rel.assets | Where-Object { $_.name -match "win" -and $_.name -match "\.zip$" } | Select-Object -First 1
+          Write-Host "chosen=$($asset.name)"
+          Invoke-WebRequest -UseBasicParsing -Uri $asset.browser_download_url -OutFile "suw.zip"
           Get-ChildItem *.zip | ForEach-Object { Expand-Archive $_.FullName -DestinationPath .\app -Force }
           Get-ChildItem .\app -Recurse -Depth 2 | Select-Object -First 80 | ForEach-Object { $_.FullName.Replace((Get-Location).Path, '') + "  " + $_.Length }
           $root = (Get-ChildItem .\app -Directory | Select-Object -First 1).FullName
