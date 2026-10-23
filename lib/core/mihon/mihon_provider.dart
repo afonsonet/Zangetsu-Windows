@@ -14,12 +14,13 @@ import '../models/video_source.dart';
 import '../provider/base_provider.dart';
 import '../provider/reading_provider.dart';
 import '../error/exceptions.dart';
+import '../desktop/manga_engine.dart';
 import 'mihon_filters.dart';
 import 'mihon_mapping.dart';
 import 'mihon_source_info.dart';
 
 /// Shared channel — matches the name registered in [MihonBridge.attach].
-const MethodChannel _mihonChannel = MethodChannel('zangetsu/mihon');
+const MethodChannel _mihonChannel = MangaChannel('zangetsu/mihon');
 
 /// Evicts the native OkHttp response cache that Mihon AND Aniyomi share, so a
 /// manual refresh re-hits the source instead of serving the 10-min-cached JSON.

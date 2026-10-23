@@ -22,8 +22,9 @@ import 'package:flutter/painting.dart';
 import 'package:flutter/services.dart';
 
 import '../cache/app_image_cache.dart';
+import '../desktop/manga_engine.dart';
 
-const MethodChannel _kMihonChannel = MethodChannel('zangetsu/mihon');
+const MethodChannel _kMihonChannel = MangaChannel('zangetsu/mihon');
 
 /// [ImageProvider] that fetches image bytes via the native Mihon OkHttpClient.
 ///

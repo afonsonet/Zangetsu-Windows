@@ -9,7 +9,7 @@ on:
 
 env:
   # Versao da Release do Windows (Windows-Port X.Y). Sobe 0.1 de cada vez.
-  WINDOWS_PORT_VERSION: "0.3"
+  WINDOWS_PORT_VERSION: "0.4"
 
 permissions:
   contents: write      # necessário só para publicar o log nas branches build-logs-*
@@ -64,6 +64,25 @@ jobs:
           git add windows.log
           git commit -q -m "log do run ${GITHUB_RUN_ID}"
           git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" build-logs-windows
+      - name: Motor de manga (Suwayomi-Server + Java)
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Versao fixa: o adaptador (lib/core/desktop/manga_engine.dart) foi escrito contra esta API.
+          $rel = gh api repos/Suwayomi/Suwayomi-Server/releases/tags/v2.4.2366 | ConvertFrom-Json
+          $asset = $rel.assets | Where-Object { $_.name -match "windows-x64\.zip$" } | Select-Object -First 1
+          Write-Host "Suwayomi $($rel.tag_name): $($asset.name)"
+          Invoke-WebRequest -UseBasicParsing -Uri $asset.browser_download_url -OutFile "$env:RUNNER_TEMP\suw.zip"
+          Expand-Archive "$env:RUNNER_TEMP\suw.zip" -DestinationPath "$env:RUNNER_TEMP\suw" -Force
+          $src = (Get-ChildItem "$env:RUNNER_TEMP\suw" -Directory | Select-Object -First 1).FullName
+          $dst = "build/windows/x64/runner/Release/manga-engine"
+          New-Item -ItemType Directory -Force -Path $dst | Out-Null
+          # So jre + bin (sem o Electron, 290 MB que nao usamos).
+          Copy-Item "$src\jre" "$dst\jre" -Recurse
+          Copy-Item "$src\bin" "$dst\bin" -Recurse
+          if (-not (Test-Path "$dst\jre\bin\javaw.exe") -or -not (Test-Path "$dst\bin\Suwayomi-Server.jar")) { throw "motor de manga incompleto" }
+          Write-Host ("manga-engine: {0:N0} MB" -f ((Get-ChildItem $dst -Recurse -File | Measure-Object Length -Sum).Sum / 1MB))
       - uses: actions/upload-artifact@v4
         if: success()
         with:

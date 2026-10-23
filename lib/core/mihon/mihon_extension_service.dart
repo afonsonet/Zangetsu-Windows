@@ -11,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../aniyomi/aniyomi_repo.dart';
 import '../desktop/desktop_cf_solver.dart';
+import '../desktop/manga_engine.dart';
 import '../lnreader/novel_cloudflare.dart';
 import '../provider/cf_solve_needed.dart';
 import 'mihon_manager.dart';
@@ -39,7 +40,7 @@ export 'mihon_source_info.dart';
 /// `AniyomiRepo`: Mihon repos publish `index.json` in a different shape (see
 /// `mihon_repo.dart`).
 class MihonExtensionService {
-  static const MethodChannel _channel = MethodChannel('zangetsu/mihon');
+  static const MethodChannel _channel = MangaChannel('zangetsu/mihon');
 
   /// Hive box name used to persist installed pkg → apk-path entries so they
   /// can be reloaded on a cold start without re-downloading. Deliberately

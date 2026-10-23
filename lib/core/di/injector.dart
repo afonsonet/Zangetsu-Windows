@@ -4,6 +4,7 @@ import 'package:watch_app/core/hive/safe_box.dart';
 import 'package:watch_app/core/hive/source_icon_store.dart';
 import 'package:watch_app/core/lnreader/novel_cloudflare.dart';
 import 'package:watch_app/core/desktop/windows_http_lane.dart';
+import 'package:watch_app/core/desktop/manga_engine.dart';
 import 'package:watch_app/core/logging/app_logger.dart';
 
 import 'package:dio/dio.dart';
@@ -970,7 +971,9 @@ Future<void> initDependencies() async {
   //     picker's listing, and every data call in one place: on iOS nothing is
   //     ever loaded, so no MihonProvider is ever constructed.
   Future.microtask(() async {
-    if (!Platform.isAndroid) return; // Mihon extensions are Android-only (DEX)
+    // Mihon extensions are Android DEX: native on Android, hosted by the bundled
+    // Java engine on Windows (see core/desktop/manga_engine.dart).
+    if (!Platform.isAndroid && !MangaEngine.isAvailable) return;
     try {
       if (!Hive.isBoxOpen(MihonExtensionService.installedBoxName)) {
         await openBoxSafely<dynamic>(MihonExtensionService.installedBoxName);
