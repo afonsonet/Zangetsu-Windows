@@ -1,0 +1,77 @@
+# Sonda manual: arranca o Suwayomi-Server num Windows e escreve no log a estrutura
+# e as respostas reais da API (para construir o adaptador de manga sem adivinhar).
+# Nao gera release. Log -> branch engine-probe-log (ficheiro probe.log).
+name: engine-probe
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sonda Suwayomi
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ErrorActionPreference = "Continue"
+          Start-Transcript -Path "$env:RUNNER_TEMP\probe.log" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\suw" | Out-Null
+          Set-Location "$env:RUNNER_TEMP\suw"
+          gh release view --repo Suwayomi/Suwayomi-Server --json tagName,assets -q '.tagName, (.assets[]|.name+" "+(.size|tostring))'
+          gh release download --repo Suwayomi/Suwayomi-Server --pattern "*win64*.zip" --dir .
+          Get-ChildItem *.zip | ForEach-Object { Expand-Archive $_.FullName -DestinationPath .\app -Force }
+          Get-ChildItem .\app -Recurse -Depth 2 | Select-Object -First 80 | ForEach-Object { $_.FullName.Replace((Get-Location).Path, '') + "  " + $_.Length }
+          $root = (Get-ChildItem .\app -Directory | Select-Object -First 1).FullName
+          if (-not $root) { $root = (Resolve-Path .\app).Path }
+          Write-Host "root=$root"
+          $java = Get-ChildItem $root -Recurse -Filter java.exe | Select-Object -First 1
+          $jar  = Get-ChildItem $root -Recurse -Filter "*.jar" | Where-Object { $_.Name -match "Suwayomi|Tachidesk" } | Select-Object -First 1
+          Write-Host "java=$($java.FullName) jar=$($jar.FullName)"
+          & $java.FullName -version 2>&1
+          $data = "$env:RUNNER_TEMP\suwdata"
+          New-Item -ItemType Directory -Force -Path $data | Out-Null
+          $jargs = @("-Dsuwayomi.tachidesk.config.server.rootDir=$data",
+                    "-Dsuwayomi.tachidesk.config.server.initialOpenInBrowserEnabled=false",
+                    "-Dsuwayomi.tachidesk.config.server.systemTrayEnabled=false",
+                    "-Dsuwayomi.tachidesk.config.server.ip=127.0.0.1",
+                    "-Dsuwayomi.tachidesk.config.server.port=4567",
+                    "-jar", $jar.FullName)
+          $p = Start-Process -FilePath $java.FullName -ArgumentList $jargs -PassThru -RedirectStandardOutput "$env:RUNNER_TEMP\suw.out" -RedirectStandardError "$env:RUNNER_TEMP\suw.err" -WindowStyle Hidden
+          $up = $false
+          for ($i=0; $i -lt 90; $i++) {
+            Start-Sleep -Seconds 2
+            try { $r = Invoke-WebRequest -UseBasicParsing http://127.0.0.1:4567/api/graphql -Method Post -ContentType "application/json" -Body '{"query":"{ aboutServer { name version buildType } }"}'; Write-Host "UP: $($r.Content)"; $up = $true; break } catch { }
+          }
+          Write-Host "up=$up"
+          function Gql($q) { try { (Invoke-WebRequest -UseBasicParsing http://127.0.0.1:4567/api/graphql -Method Post -ContentType "application/json" -Body (@{query=$q} | ConvertTo-Json -Compress)).Content } catch { "ERR: $_" } }
+          if ($up) {
+            Write-Host "--- Query/Mutation fields ---"
+            Gql '{ __schema { queryType { fields { name args { name } } } mutationType { fields { name args { name } } } } }'
+            Write-Host "--- settings ---"
+            Gql '{ settings { extensionRepos } }'
+            Write-Host "--- sources ---"
+            Gql '{ sources { nodes { id name lang } } }'
+          }
+          Write-Host "--- suw.out (tail) ---"
+          Get-Content "$env:RUNNER_TEMP\suw.out" -Tail 60 -ErrorAction SilentlyContinue
+          Write-Host "--- suw.err (tail) ---"
+          Get-Content "$env:RUNNER_TEMP\suw.err" -Tail 60 -ErrorAction SilentlyContinue
+          if (-not $p.HasExited) { $p.Kill() }
+          Stop-Transcript | Out-Null
+      - name: Publicar log
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/lg" && cd "$RUNNER_TEMP/lg"
+          cat "$RUNNER_TEMP/probe.log" > probe.log 2>/dev/null || echo "sem log" > probe.log
+          git init -q -b engine-probe-log
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add probe.log
+          git commit -q -m "probe ${GITHUB_RUN_ID}"
+          git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" engine-probe-log
