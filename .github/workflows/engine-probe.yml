@@ -34,7 +34,7 @@ jobs:
           if (-not $root) { $root = (Resolve-Path .\app).Path }
           Write-Host "root=$root"
           $java = Get-ChildItem $root -Recurse -Filter java.exe | Select-Object -First 1
-          $jar  = Get-ChildItem $root -Recurse -Filter "*.jar" | Where-Object { $_.Name -match "Suwayomi|Tachidesk" } | Select-Object -First 1
+          $jar  = Get-ChildItem (Join-Path $root "bin") -Filter "Suwayomi-Server*.jar" | Select-Object -First 1
           Write-Host "java=$($java.FullName) jar=$($jar.FullName)"
           & $java.FullName -version 2>&1
           $data = "$env:RUNNER_TEMP\suwdata"
