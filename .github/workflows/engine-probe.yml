@@ -53,16 +53,39 @@ jobs:
           }
           Write-Host "up=$up"
           function Gql($q) { try { (Invoke-WebRequest -UseBasicParsing http://127.0.0.1:4567/api/graphql -Method Post -ContentType "application/json" -Body (@{query=$q} | ConvertTo-Json -Compress)).Content } catch { "ERR: $_" } }
+          function Show($title, $text) { Write-Host "--- $title ---"; $s = "$text"; if ($s.Length -gt 2500) { $s = $s.Substring(0,2500) + " ...[cortado]" }; Write-Host $s }
           if ($up) {
-            Write-Host "--- Query/Mutation fields ---"
-            Gql '{ __schema { queryType { fields { name args { name } } } mutationType { fields { name args { name } } } } }'
-            Write-Host "--- settings ---"
-            Gql '{ settings { extensionRepos } }'
-            Write-Host "--- sources ---"
-            Gql '{ sources { nodes { id name lang } } }'
+            Show "set repo" (Gql 'mutation { setSettings(input: { settings: { extensionRepos: ["https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json"] } }) { settings { extensionRepos } } }')
+            Show "fetchExtensions" (Gql 'mutation { fetchExtensions(input: {}) { extensions { pkgName name lang isInstalled isObsolete hasUpdate } } }')
+            Show "install mangadex" (Gql 'mutation { updateExtension(input: { id: "eu.kanade.tachiyomi.extension.all.mangadex", patch: { install: true } }) { extension { pkgName isInstalled } } }')
+            Start-Sleep -Seconds 8
+            $srcs = Gql '{ sources { nodes { id name lang displayName isNsfw supportsLatest iconUrl } } }'
+            Show "sources" $srcs
+            $sid = ($srcs | ConvertFrom-Json).data.sources.nodes | Where-Object { $_.name -match "MangaDex" -and $_.lang -eq "en" } | Select-Object -First 1 -ExpandProperty id
+            Write-Host "sid=$sid"
+            if ($sid) {
+              $pop = Gql "mutation { fetchSourceManga(input: { source: \"$sid\", type: POPULAR, page: 1 }) { hasNextPage mangas { id title thumbnailUrl url } } }"
+              Show "popular" $pop
+              $mid = ($pop | ConvertFrom-Json).data.fetchSourceManga.mangas | Select-Object -First 1 -ExpandProperty id
+              Write-Host "mid=$mid"
+              if ($mid) {
+                Show "fetchManga" (Gql "mutation { fetchManga(input: { id: $mid }) { manga { id title author artist description genre status thumbnailUrl realUrl } } }")
+                $ch = Gql "mutation { fetchChapters(input: { mangaId: $mid }) { chapters { id name chapterNumber scanlator uploadDate url } } }"
+                Show "chapters" $ch
+                $cid = ($ch | ConvertFrom-Json).data.fetchChapters.chapters | Select-Object -First 1 -ExpandProperty id
+                Write-Host "cid=$cid"
+                if ($cid) {
+                  $pg = Gql "mutation { fetchChapterPages(input: { chapterId: $cid }) { pages chapter { id pageCount } } }"
+                  Show "pages" $pg
+                  $first = ($pg | ConvertFrom-Json).data.fetchChapterPages.pages | Select-Object -First 1
+                  Write-Host "first page=$first"
+                  if ($first) { try { $img = Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:4567$first"; Write-Host "image: $($img.StatusCode) $($img.Headers['Content-Type']) $($img.RawContentLength) bytes" } catch { Write-Host "image ERR: $_" } }
+                }
+              }
+            }
           }
-          Write-Host "--- suw.out (tail) ---"
-          Get-Content "$env:RUNNER_TEMP\suw.out" -Tail 60 -ErrorAction SilentlyContinue
+          Write-Host "--- suw.out (tail, sem progresso de download) ---"
+          Get-Content "$env:RUNNER_TEMP\suw.out" -ErrorAction SilentlyContinue | Where-Object { $_ -notmatch "Downloading \d+%" } | Select-Object -Last 60
           Write-Host "--- suw.err (tail) ---"
           Get-Content "$env:RUNNER_TEMP\suw.err" -Tail 60 -ErrorAction SilentlyContinue
           if (-not $p.HasExited) { $p.Kill() }
