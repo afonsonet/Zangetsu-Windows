@@ -90,6 +90,26 @@ jobs:
               }
             }
           }
+          if ($up) {
+            foreach ($t in @("SettingsType","SourceType","MangaType","ChapterType","ExtensionType","FetchSourceMangaInput","Mutation","Query")) {
+              Show "type $t" (Gql ('{ __type(name: "' + $t + '") { fields { name } inputFields { name } enumValues { name } } }'))
+            }
+            Show "sources+extension" (Gql '{ sources { nodes { id name extension { pkgName versionName versionCode } } } }')
+            Show "mangas by url filter" (Gql '{ mangas(filter: { url: { equalTo: "/manga/cfef125c-7ca2-4c58-a5e8-e695a1ec9226" } }) { nodes { id url title sourceId } } }')
+            Show "chapters by url filter" (Gql '{ chapters(filter: { url: { equalTo: "/chapter/a920779b-af51-4ea3-8871-365eb58bf7af" } }) { nodes { id url mangaId } } }')
+            $sid2 = "2499283573021220255"
+            Show "search" (Gql ('mutation { fetchSourceManga(input: { source: "' + $sid2 + '", type: SEARCH, page: 1, query: "gyaru" }) { hasNextPage mangas { id title url } } }'))
+            Show "latest" (Gql ('mutation { fetchSourceManga(input: { source: "' + $sid2 + '", type: LATEST, page: 1 }) { hasNextPage mangas { id title url } } }'))
+            Show "source filters" (Gql ('{ source(id: "' + $sid2 + '") { id isConfigurable filters { __typename } preferences { __typename } } }'))
+            try { $th = Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:4567/api/v1/manga/1/thumbnail"; Write-Host "thumb: $($th.StatusCode) $($th.Headers['Content-Type']) $($th.RawContentLength) bytes" } catch { Write-Host "thumb ERR: $_" }
+            Write-Host "--- sizes ---"
+            $appRoot = (Get-ChildItem "$env:RUNNER_TEMP\suw\app" -Directory | Select-Object -First 1).FullName
+            foreach ($d in @("jre","bin","electron")) { $sz = (Get-ChildItem (Join-Path $appRoot $d) -Recurse -File | Measure-Object Length -Sum).Sum; Write-Host ("{0}: {1:N0} MB" -f $d, ($sz/1MB)) }
+            $dd = (Get-ChildItem "$env:RUNNER_TEMP\suwdata" -Recurse -File -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum
+            Write-Host ("data dir: {0:N0} MB" -f ($dd/1MB))
+            $cef = (Get-ChildItem "C:\Users\runneradmin\AppData\Local\Temp\Tachidesk" -Recurse -File -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum
+            Write-Host ("Tachidesk temp dir: {0:N0} MB" -f ($cef/1MB))
+          }
           Write-Host "--- suw.out (tail, sem progresso de download) ---"
           Get-Content "$env:RUNNER_TEMP\suw.out" -ErrorAction SilentlyContinue | Where-Object { $_ -notmatch "Downloading \d+%" } | Select-Object -Last 60
           Write-Host "--- suw.err (tail) ---"
