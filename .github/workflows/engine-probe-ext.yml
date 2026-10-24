@@ -1,0 +1,98 @@
+# Sonda manual: arranca o Suwayomi-Server num Windows e escreve no log a estrutura
+# e as respostas reais da API (para construir o adaptador de manga sem adivinhar).
+# Nao gera release. Log -> branch engine-probe-log (ficheiro probe-ext.log).
+name: engine-probe-ext
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sonda Suwayomi
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ErrorActionPreference = "Continue"
+          Start-Transcript -Path "$env:RUNNER_TEMP\probe.log" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\suw" | Out-Null
+          Set-Location "$env:RUNNER_TEMP\suw"
+          $rel = gh api repos/Suwayomi/Suwayomi-Server/releases/latest | ConvertFrom-Json
+          Write-Host "tag=$($rel.tag_name)"
+          $rel.assets | ForEach-Object { Write-Host "asset: $($_.name) $($_.size)" }
+          $asset = $rel.assets | Where-Object { $_.name -match "win" -and $_.name -match "\.zip$" } | Select-Object -First 1
+          Write-Host "chosen=$($asset.name)"
+          Invoke-WebRequest -UseBasicParsing -Uri $asset.browser_download_url -OutFile "suw.zip"
+          Get-ChildItem *.zip | ForEach-Object { Expand-Archive $_.FullName -DestinationPath .\app -Force }
+          Get-ChildItem .\app -Recurse -Depth 2 | Select-Object -First 80 | ForEach-Object { $_.FullName.Replace((Get-Location).Path, '') + "  " + $_.Length }
+          $root = (Get-ChildItem .\app -Directory | Select-Object -First 1).FullName
+          if (-not $root) { $root = (Resolve-Path .\app).Path }
+          Write-Host "root=$root"
+          $java = Get-ChildItem $root -Recurse -Filter java.exe | Select-Object -First 1
+          $jar  = Get-ChildItem (Join-Path $root "bin") -Filter "Suwayomi-Server*.jar" | Select-Object -First 1
+          Write-Host "java=$($java.FullName) jar=$($jar.FullName)"
+          & $java.FullName -version 2>&1
+          $data = "$env:RUNNER_TEMP\suwdata"
+          New-Item -ItemType Directory -Force -Path $data | Out-Null
+          $jargs = @("-Dsuwayomi.tachidesk.config.server.rootDir=$data",
+                    "-Dsuwayomi.tachidesk.config.server.initialOpenInBrowserEnabled=false",
+                    "-Dsuwayomi.tachidesk.config.server.systemTrayEnabled=false", "-Dsuwayomi.tachidesk.config.server.kcefEnabled=false", "-Dsuwayomi.tachidesk.config.server.webUIEnabled=false",
+                    "-Dsuwayomi.tachidesk.config.server.ip=127.0.0.1",
+                    "-Dsuwayomi.tachidesk.config.server.port=4567",
+                    "-jar", $jar.FullName)
+          $p = Start-Process -FilePath $java.FullName -ArgumentList $jargs -PassThru -RedirectStandardOutput "$env:RUNNER_TEMP\suw.out" -RedirectStandardError "$env:RUNNER_TEMP\suw.err" -WindowStyle Hidden
+          $up = $false
+          for ($i=0; $i -lt 90; $i++) {
+            Start-Sleep -Seconds 2
+            try { $r = Invoke-WebRequest -UseBasicParsing http://127.0.0.1:4567/api/graphql -Method Post -ContentType "application/json" -Body '{"query":"{ aboutServer { name version buildType } }"}'; Write-Host "UP: $($r.Content)"; $up = $true; break } catch { }
+          }
+          Write-Host "up=$up"
+          function Gql($q) { try { (Invoke-WebRequest -UseBasicParsing http://127.0.0.1:4567/api/graphql -Method Post -ContentType "application/json" -Body (@{query=$q} | ConvertTo-Json -Compress)).Content } catch { "ERR: $_" } }
+          function Show($title, $text) { Write-Host "--- $title ---"; $s = "$text"; if ($s.Length -gt 1500) { $s = $s.Substring(0,1500) + " ...[cortado]" }; Write-Host $s }
+          $apkDir = "$env:RUNNER_TEMP\apks"; New-Item -ItemType Directory -Force -Path $apkDir | Out-Null
+          $idx = Invoke-RestMethod "https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json"
+          Write-Host "index entries: $($idx.Count)"
+          $want = @("MangaDex","Comic Growl","MANGA Plus","Mangakakalot","Webtoon","Comick","Asura","Manganato","Tachidesk","Batoto")
+          $picked = @()
+          foreach ($w in $want) {
+            $m = $idx | Where-Object { $_.name -like "*: $w*" -and ($_.lang -in @("en","all")) } | Select-Object -First 1
+            if ($m) { $picked += $m; Write-Host "picked '$w' -> $($m.pkg) ($($m.apk))" } else { Write-Host "no match for '$w'" }
+          }
+          foreach ($m in $picked) {
+            $f = Join-Path $apkDir $m.apk
+            try { Invoke-WebRequest -UseBasicParsing "https://raw.githubusercontent.com/keiyoushi/extensions/repo/apk/$($m.apk)" -OutFile $f } catch { Write-Host "download ERR $($m.apk): $_"; continue }
+            $ops = '{"query":"mutation ($file: Upload!) { installExternalExtension(input: { extensionFile: $file }) { extension { pkgName isInstalled } } }","variables":{"file":null}}'
+            $out = & curl.exe -s -S -X POST http://127.0.0.1:4567/api/graphql -F "operations=$ops" -F 'map={"0":["variables.file"]}' -F "0=@$f;type=application/vnd.android.package-archive;filename=$($m.pkg).apk"
+            Show "upload $($m.pkg)" $out
+          }
+          $srcs = (Gql '{ sources { nodes { id name lang extension { pkgName } } } }' | ConvertFrom-Json).data.sources.nodes | Where-Object { $_.id -ne "0" }
+          Write-Host "sources installed: $($srcs.Count)"
+          foreach ($s in ($srcs | Where-Object { $_.lang -in @("en","all") })) {
+            $q = 'mutation { fetchSourceManga(input: { source: "' + $s.id + '", type: POPULAR, page: 1 }) { mangas { id title } } }'
+            $r = Gql $q
+            if ($r -match '"errors"') { $e = ($r | ConvertFrom-Json).errors[0].message; if ($e.Length -gt 220) { $e = $e.Substring(0,220) }; Write-Host "POPULAR FAIL  [$($s.name)/$($s.lang)] $e" }
+            else { $n = ([regex]::Matches($r, '"id"')).Count; Write-Host "POPULAR OK    [$($s.name)/$($s.lang)] $n mangas" }
+          }
+          Write-Host "--- ClassCast stack (engine log) ---"
+          $log = Get-Content "$env:RUNNER_TEMP\suw.out" -ErrorAction SilentlyContinue
+          $i = ($log | Select-String "ClassCastException" | Select-Object -First 1).LineNumber
+          if ($i) { $log[($i-1)..([Math]::Min($i+25, $log.Count-1))] | ForEach-Object { if ($_.Length -gt 240) { $_.Substring(0,240) } else { $_ } } }
+          if (-not $p.HasExited) { $p.Kill() }
+          Stop-Transcript | Out-Null
+      - name: Publicar log
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/lg" && cd "$RUNNER_TEMP/lg"
+          cat "$RUNNER_TEMP/probe.log" > probe-ext.log 2>/dev/null || echo "sem log" > probe-ext.log
+          git init -q -b engine-probe-log
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add probe-ext.log
+          git commit -q -m "probe-ext ${GITHUB_RUN_ID}"
+          git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" engine-probe-log
