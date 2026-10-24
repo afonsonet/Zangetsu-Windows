@@ -47,6 +47,11 @@ class MangaEngine {
   Process? _proc;
   int? _port;
   Future<void>? _starting;
+  // True only once the engine has answered a request. `_proc`/`_port` are set
+  // as soon as the process is spawned, so they alone can't tell "starting"
+  // from "ready" (0.4 raced on that: a second caller saw them set and hit the
+  // port ~10 s before the server was listening).
+  bool _ready = false;
   final HttpClient _http = HttpClient()
     ..connectionTimeout = const Duration(seconds: 10);
 
@@ -61,7 +66,7 @@ class MangaEngine {
   // ── process ────────────────────────────────────────────────────────────────
 
   Future<void> ensureStarted() {
-    if (_proc != null && _port != null) return Future.value();
+    if (_ready && _proc != null && _port != null) return Future.value();
     return _starting ??= _start().whenComplete(() => _starting = null);
   }
 
@@ -108,6 +113,7 @@ class MangaEngine {
       if (identical(_proc, proc)) {
         _proc = null;
         _port = null;
+        _ready = false;
         _reposApplied = false;
       }
       await logFile.close();
@@ -119,6 +125,7 @@ class MangaEngine {
       try {
         final r = await _gqlRaw('{ aboutServer { version } }');
         if (r['data'] != null) {
+          _ready = true;
           _log('ready on 127.0.0.1:$port');
           return;
         }
@@ -128,6 +135,7 @@ class MangaEngine {
     proc.kill();
     _proc = null;
     _port = null;
+    _ready = false;
     throw PlatformException(
       code: 'ENGINE',
       message: 'The manga engine did not start. See manga-engine/engine.log.',
@@ -194,9 +202,62 @@ class MangaEngine {
     _reposApplied = true;
   }
 
-  Future<void> _install(String pkg) async {
-    await _applyRepos();
+  /// Sends the APK the app already downloaded straight to the engine
+  /// (GraphQL multipart upload). This does not depend on the engine reaching
+  /// GitHub itself, which is what failed in 0.4 (empty extension list).
+  Future<void> _uploadApk(String apkPath, String pkg) async {
+    await ensureStarted();
+    final bytes = await File(apkPath).readAsBytes();
+    final boundary = '----zangetsu${DateTime.now().microsecondsSinceEpoch}';
+    final ops = jsonEncode({
+      'query':
+          'mutation (\$file: Upload!) { installExternalExtension(input: { extensionFile: \$file }) { extension { pkgName isInstalled } } }',
+      'variables': {'file': null},
+    });
+    final head = utf8.encode(
+      '--$boundary\r\nContent-Disposition: form-data; name="operations"\r\n\r\n$ops\r\n'
+      '--$boundary\r\nContent-Disposition: form-data; name="map"\r\n\r\n{"0":["variables.file"]}\r\n'
+      '--$boundary\r\nContent-Disposition: form-data; name="0"; filename="$pkg.apk"\r\n'
+      'Content-Type: application/vnd.android.package-archive\r\n\r\n',
+    );
+    final tail = utf8.encode('\r\n--$boundary--\r\n');
+    final req = await _http.postUrl(Uri.parse('$_base/api/graphql'));
+    req.headers.set('Content-Type', 'multipart/form-data; boundary=$boundary');
+    req.contentLength = head.length + bytes.length + tail.length;
+    req.add(head);
+    req.add(bytes);
+    req.add(tail);
+    final res = await req.close().timeout(const Duration(minutes: 3));
+    final text = await utf8.decoder.bind(res).join();
+    final r = jsonDecode(text) as Map<String, dynamic>;
+    final errors = r['errors'];
+    if (errors is List && errors.isNotEmpty) {
+      throw PlatformException(
+        code: 'ENGINE',
+        message: '${(errors.first as Map)['message']}'.split('\n').first,
+      );
+    }
+    final ext = ((r['data'] as Map?)?['installExternalExtension'] as Map?)?['extension'] as Map?;
+    if (ext == null || ext['isInstalled'] != true) {
+      throw PlatformException(code: 'LOAD', message: 'engine did not install $pkg');
+    }
+  }
+
+  Future<void> _install(String pkg, String apkPath) async {
     Object? last;
+    try {
+      await _uploadApk(apkPath, pkg);
+      _log('installed $pkg (uploaded apk)');
+      return;
+    } catch (e) {
+      last = e;
+      _log('upload install of $pkg failed: $e — trying the extension store');
+    }
+    try {
+      await _applyRepos();
+    } catch (e) {
+      last = e;
+    }
     for (var i = 0; i < 6; i++) {
       try {
         final d = await _gql(
@@ -237,7 +298,7 @@ class MangaEngine {
       case 'installExtension':
         final apk = '${a['apkPath']}'.replaceAll('\\', '/');
         final name = apk.substring(apk.lastIndexOf('/') + 1);
-        await _install(name.replaceAll(RegExp(r'\.apk$'), ''));
+        await _install(name.replaceAll(RegExp(r'\.apk$'), ''), apk);
         return null;
       case 'listSources':
         return _listSources();
@@ -452,7 +513,12 @@ class MangaChannel extends MethodChannel {
         Platform.environment['FLUTTER_TEST'] == 'true') {
       return super.invokeMethod<T>(method, arguments);
     }
-    final result = await MangaEngine.instance.invoke(method, arguments);
-    return result as T?;
+    try {
+      final result = await MangaEngine.instance.invoke(method, arguments);
+      return result as T?;
+    } catch (e) {
+      MangaEngine.instance._log('$method failed: $e');
+      rethrow;
+    }
   }
 }

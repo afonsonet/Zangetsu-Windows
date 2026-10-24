@@ -301,14 +301,20 @@ func looksLikeChallenge(status int, headers map[string]string, body []byte) bool
 	if strings.Contains(strings.ToLower(headers["cf-mitigated"]), "challenge") {
 		return true
 	}
+	isCF := strings.Contains(strings.ToLower(headers["server"]), "cloudflare")
+	n := min(len(body), 30000)
+	b := strings.ToLower(string(body[:n]))
+	// Some sites serve the interstitial with a 200; its <title> gives it away.
+	if isCF && (strings.Contains(b, "<title>just a moment") ||
+		strings.Contains(b, "<title>attention required")) {
+		return true
+	}
 	if status != 403 && status != 429 && status != 503 {
 		return false
 	}
-	if !strings.Contains(strings.ToLower(headers["server"]), "cloudflare") {
+	if !isCF {
 		return false
 	}
-	n := min(len(body), 30000)
-	b := strings.ToLower(string(body[:n]))
 	return strings.Contains(b, "just a moment") ||
 		strings.Contains(b, "cf-chl") ||
 		strings.Contains(b, "challenge-platform")

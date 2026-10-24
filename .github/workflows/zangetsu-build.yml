@@ -9,7 +9,7 @@ on:
 
 env:
   # Versao da Release do Windows (Windows-Port X.Y). Sobe 0.1 de cada vez.
-  WINDOWS_PORT_VERSION: "0.4"
+  WINDOWS_PORT_VERSION: "0.5"
 
 permissions:
   contents: write      # necessário só para publicar o log nas branches build-logs-*
