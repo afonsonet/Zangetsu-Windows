@@ -55,17 +55,25 @@ jobs:
           function Gql($q) { try { (Invoke-WebRequest -UseBasicParsing http://127.0.0.1:4567/api/graphql -Method Post -ContentType "application/json" -Body (@{query=$q} | ConvertTo-Json -Compress)).Content } catch { "ERR: $_" } }
           function Show($title, $text) { Write-Host "--- $title ---"; $s = "$text"; if ($s.Length -gt 1500) { $s = $s.Substring(0,1500) + " ...[cortado]" }; Write-Host $s }
           $apkDir = "$env:RUNNER_TEMP\apks"; New-Item -ItemType Directory -Force -Path $apkDir | Out-Null
-          $idx = Invoke-RestMethod "https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json"
-          Write-Host "index entries: $($idx.Count)"
-          $want = @("MangaDex","Comic Growl","MANGA Plus","Mangakakalot","Webtoon","Comick","Asura","Manganato","Tachidesk","Batoto")
+          # index.min.json do Keiyoushi passou a ser so um aviso (2 entradas); os APKs ficam na branch "repo".
+          $kei = "$env:RUNNER_TEMP\kei"
+          git clone -q --depth=1 --filter=blob:none --no-checkout -b repo https://github.com/keiyoushi/extensions.git $kei
+          Push-Location $kei
+          $names = git ls-tree -r --name-only HEAD apk/ | ForEach-Object { $_ -replace '^apk/','' }
+          Write-Host "apks in repo: $($names.Count)"
+          $want = @("all.mangadex","all.comicgrowl","all.mangaplus","all.comicklive","en.mangapill","en.mangakakalot","en.manganato","en.asurascans","en.batoto","en.mangafire","en.weebcentral")
           $picked = @()
           foreach ($w in $want) {
-            $m = $idx | Where-Object { $_.name -like "*: $w*" -and ($_.lang -in @("en","all")) } | Select-Object -First 1
-            if ($m) { $picked += $m; Write-Host "picked '$w' -> $($m.pkg) ($($m.apk))" } else { Write-Host "no match for '$w'" }
+            $m = $names | Where-Object { $_ -like "tachiyomi-$w-v*.apk" } | Sort-Object { [version](($_ -replace '^.*-v','') -replace '\.apk$','') } | Select-Object -Last 1
+            if ($m) { $picked += [pscustomobject]@{ pkg = "eu.kanade.tachiyomi.extension.$w"; apk = $m }; Write-Host "picked $w -> $m" } else { Write-Host "no apk for $w" }
           }
+          git sparse-checkout init --no-cone | Out-Null
+          git sparse-checkout set ($picked | ForEach-Object { "apk/$($_.apk)" }) | Out-Null
+          git checkout -q
+          Pop-Location
           foreach ($m in $picked) {
-            $f = Join-Path $apkDir $m.apk
-            try { Invoke-WebRequest -UseBasicParsing "https://raw.githubusercontent.com/keiyoushi/extensions/repo/apk/$($m.apk)" -OutFile $f } catch { Write-Host "download ERR $($m.apk): $_"; continue }
+            $f = Join-Path $kei "apk\$($m.apk)"
+            if (-not (Test-Path $f)) { Write-Host "missing file $($m.apk)"; continue }
             $ops = '{"query":"mutation ($file: Upload!) { installExternalExtension(input: { extensionFile: $file }) { extension { pkgName isInstalled } } }","variables":{"file":null}}'
             $out = & curl.exe -s -S -X POST http://127.0.0.1:4567/api/graphql -F "operations=$ops" -F 'map={"0":["variables.file"]}' -F "0=@$f;type=application/vnd.android.package-archive;filename=$($m.pkg).apk"
             Show "upload $($m.pkg)" $out
