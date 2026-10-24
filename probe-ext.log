@@ -1,0 +1,90 @@
+**********************
+PowerShell transcript start
+Start time: 20261024233823
+Username: runnervmdaln5\runneradmin
+RunAs User: runnervmdaln5\runneradmin
+Configuration Name: 
+Machine: runnervmdaln5 (Microsoft Windows NT 10.0.26100.0)
+Host Application: C:\Program Files\PowerShell\7\pwsh.dll -command . 'D:\a\_temp\649fb737-ed05-4ecb-9c69-9f56a4f950fc.ps1'
+Process ID: 2684
+PSVersion: 7.6.7
+PSEdition: Core
+GitCommitId: 7.6.7
+OS: Microsoft Windows 10.0.26100
+Platform: Win32NT
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1, 6.0, 7.0
+PSRemotingProtocolVersion: 2.4
+SerializationVersion: 1.1.0.1
+WSManStackVersion: 3.0
+**********************
+tag=v2.4.2366
+asset: Checksums.sha256 970
+asset: Suwayomi-Server-v2.4.2366-appimage.AppImage 222841336
+asset: Suwayomi-Server-v2.4.2366-debian-all.deb 179896262
+asset: Suwayomi-Server-v2.4.2366-linux-assets.tar.gz 15374987
+asset: Suwayomi-Server-v2.4.2366-linux-x64.tar.gz 337841487
+asset: Suwayomi-Server-v2.4.2366-macOS-arm64.tar.gz 329964641
+asset: Suwayomi-Server-v2.4.2366-macOS-x64.tar.gz 336352325
+asset: Suwayomi-Server-v2.4.2366-windows-x64.msi 356850688
+asset: Suwayomi-Server-v2.4.2366-windows-x64.zip 343828201
+asset: Suwayomi-Server-v2.4.2366.jar 182952426
+chosen=Suwayomi-Server-v2.4.2366-windows-x64.zip
+\app\Suwayomi-Server-v2.4.2366-windows-x64  1
+\app\Suwayomi-Server-v2.4.2366-windows-x64\bin  1
+\app\Suwayomi-Server-v2.4.2366-windows-x64\electron  1
+\app\Suwayomi-Server-v2.4.2366-windows-x64\jre  1
+\app\Suwayomi-Server-v2.4.2366-windows-x64\Suwayomi Launcher.bat  101
+\app\Suwayomi-Server-v2.4.2366-windows-x64\Suwayomi-Launcher.jar  17088258
+\app\Suwayomi-Server-v2.4.2366-windows-x64\bin\Suwayomi-Server.jar  182952426
+\app\Suwayomi-Server-v2.4.2366-windows-x64\electron\locales  1
+\app\Suwayomi-Server-v2.4.2366-windows-x64\electron\resources  1
+\app\Suwayomi-Server-v2.4.2366-windows-x64\electron\chrome_100_percent.pak  167282
+\app\Suwayomi-Server-v2.4.2366-windows-x64\electron\chrome_200_percent.pak  258304
+\app\Suwayomi-Server-v2.4.2366-windows-x64\electron\d3dcompiler_47.dll  4916728
+\app\Suwayomi-Server-v2.4.2366-windows-x64\electron\electron.exe  205500928
+\app\Suwayomi-Server-v2.4.2366-windows-x64\electron\ffmpeg.dll  3035648
+\app\Suwayomi-Server-v2.4.2366-windows-x64\electron\icudtl.dat  10467680
+\app\Suwayomi-Server-v2.4.2366-windows-x64\electron\libEGL.dll  503296
+\app\Suwayomi-Server-v2.4.2366-windows-x64\electron\libGLESv2.dll  8048128
+\app\Suwayomi-Server-v2.4.2366-windows-x64\electron\LICENSE  1096
+\app\Suwayomi-Server-v2.4.2366-windows-x64\electron\LICENSES.chromium.html  15270664
+\app\Suwayomi-Server-v2.4.2366-windows-x64\electron\resources.pak  6038230
+\app\Suwayomi-Server-v2.4.2366-windows-x64\electron\snapshot_blob.bin  321542
+\app\Suwayomi-Server-v2.4.2366-windows-x64\electron\v8_context_snapshot.bin  699577
+\app\Suwayomi-Server-v2.4.2366-windows-x64\electron\version  6
+\app\Suwayomi-Server-v2.4.2366-windows-x64\electron\vk_swiftshader_icd.json  106
+\app\Suwayomi-Server-v2.4.2366-windows-x64\electron\vk_swiftshader.dll  5528576
+\app\Suwayomi-Server-v2.4.2366-windows-x64\electron\vulkan-1.dll  920064
+\app\Suwayomi-Server-v2.4.2366-windows-x64\jre\bin  1
+\app\Suwayomi-Server-v2.4.2366-windows-x64\jre\conf  1
+\app\Suwayomi-Server-v2.4.2366-windows-x64\jre\legal  1
+\app\Suwayomi-Server-v2.4.2366-windows-x64\jre\lib  1
+\app\Suwayomi-Server-v2.4.2366-windows-x64\jre\release  491
+root=D:\a\_temp\suw\app\Suwayomi-Server-v2.4.2366-windows-x64
+java=D:\a\_temp\suw\app\Suwayomi-Server-v2.4.2366-windows-x64\jre\bin\java.exe jar=D:\a\_temp\suw\app\Suwayomi-Server-v2.4.2366-windows-x64\bin\Suwayomi-Server.jar
+openjdk version "25.0.4" 2026-07-21 LTS
+OpenJDK Runtime Environment Zulu25.36+15-CA (build 25.0.4+7-LTS)
+OpenJDK 64-Bit Server VM Zulu25.36+15-CA (build 25.0.4+7-LTS, mixed mode)
+PS>TerminatingError(Invoke-WebRequest): "No connection could be made because the target machine actively refused it."
+UP: {"data":{"aboutServer":{"name":"Suwayomi-Server","version":"v2.4.2366","buildType":"Stable"}}}
+up=True
+
+apks in repo: 0
+no apk for all.mangadex
+no apk for all.comicgrowl
+no apk for all.mangaplus
+no apk for all.comicklive
+no apk for en.mangapill
+no apk for en.mangakakalot
+no apk for en.manganato
+no apk for en.asurascans
+no apk for en.batoto
+no apk for en.mangafire
+no apk for en.weebcentral
+
+sources installed: 0
+--- ClassCast stack (engine log) ---
+**********************
+PowerShell transcript end
+End time: 20261024233842
+**********************
